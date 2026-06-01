@@ -1,0 +1,8 @@
+.env
+secrets/
+*.json
+!models/**/*.json
+*.pyc
+__pycache__/
+data/fix_cache/*.pkl
+trade_log_tmp_*.xlsx
