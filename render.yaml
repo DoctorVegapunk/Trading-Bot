@@ -1,0 +1,28 @@
+services:
+  - type: worker
+    name: forex-bot
+    env: docker
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: FIX_HOST
+        value: demo-us-eqx-01.p.c-trader.com
+      - key: FIX_QUOTE_PORT
+        value: "5211"
+      - key: FIX_TRADE_PORT
+        value: "5212"
+      - key: FIX_USE_SSL
+        value: "true"
+      - key: FIX_SENDER_COMP_ID
+        value: demo.pepperstone.5294375
+      - key: FIX_TARGET_COMP_ID
+        value: cServer
+      - key: FIX_ACCOUNT
+        value: "5294375"
+      - key: FIX_SENDER_SUB_ID
+        value: "5294375"
+      - key: FIX_PASSWORD
+        sync: false
+      - key: FIX_BALANCE_USD
+        value: "200"
+      - key: FIREBASE_ENABLED
+        value: "false"
