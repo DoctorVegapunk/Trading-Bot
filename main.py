@@ -1,6 +1,7 @@
 # main.py
 import os
 import logging
+from datetime import datetime, timezone
 from flask import Flask, jsonify
 
 logging.basicConfig(
@@ -18,6 +19,12 @@ def run_once():
     import live_trader as lt
 
     load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
+    # Skip weekends — forex market is closed (defense in depth)
+    now = datetime.now(timezone.utc)
+    if now.weekday() >= 5:
+        log.info("Weekend — forex closed, skipping run")
+        return
 
     instruments    = lt.INSTRUMENT_MAP
     broker_symbols = list(instruments.values())

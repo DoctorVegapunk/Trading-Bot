@@ -994,6 +994,13 @@ def main():
         log.error("No models loaded. Exiting.")
         sys.exit(1)
 
+    # Skip weekends — forex market is closed
+    if datetime.now(timezone.utc).weekday() >= 5:
+        log.info("Weekend — forex closed, sleeping until Monday")
+        while datetime.now(timezone.utc).weekday() >= 5:
+            time.sleep(3600)
+        log.info("Weekend over — resuming trading")
+
     # Initialise per-instrument state
     states = {
         key: InstrumentState(key, instruments[key])

@@ -96,7 +96,9 @@ class OpenApiClient:
                 def _on_app_auth(_):
                     try:
                         oauth = OpenApiAuth(client_id, client_secret)
-                        oauth_access_token = oauth.get_valid_token()
+                        import os
+                        rt = os.environ.get("OPEN_API_REFRESH_TOKEN", "").strip() or None
+                        oauth_access_token = oauth.get_valid_token(refresh_token=rt)
                     except Exception as e:
                         errors.append(f"OAuth token error: {e}")
                         event.set()
