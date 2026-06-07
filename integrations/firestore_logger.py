@@ -52,57 +52,42 @@ def _row_to_firestore(row: dict) -> dict[str, Any]:
 
 
 class FirestoreLogger:
-    """Optional Firestore sync for account state and trades."""
+    """Always-on Firestore sync for account state, trades, and daily logs."""
 
     def __init__(self) -> None:
-        self.enabled = os.environ.get("FIREBASE_ENABLED", "").lower() in (
-            "1", "true", "yes", "on",
-        )
         self.bot_id = os.environ.get("FIREBASE_BOT_ID", "forex-xgb")
         self.account_id = os.environ.get(
             "FIREBASE_ACCOUNT_ID",
             os.environ.get("FIX_ACCOUNT", "default"),
         )
         self._db = None
-        self._warned = False
         self._last_log_day: Optional[str] = None
 
-        if not self.enabled:
-            return
-
-        cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
-        if not cred_path or not os.path.isfile(cred_path):
-            if not self._warned:
-                log.warning(
-                    "FIREBASE_ENABLED but GOOGLE_APPLICATION_CREDENTIALS is missing or invalid. "
-                    "Download a service account JSON from Firebase Console → Project settings → "
-                    "Service accounts → Generate new private key."
-                )
-                self._warned = True
-            self.enabled = False
-            return
-
         try:
-            self._db = self._init_firestore(cred_path)
+            self._db = self._init_firestore()
             log.info(
                 "Firestore enabled | project bots/%s account/%s",
                 self.bot_id,
                 self.account_id,
             )
         except Exception as exc:
-            log.error("Firestore init failed: %s", exc)
-            self.enabled = False
+            log.critical("Firestore init failed: %s", exc)
+            raise
 
     @staticmethod
-    def _init_firestore(cred_path: str):
+    def _init_firestore():
         global _app_initialized
         import firebase_admin
         from firebase_admin import credentials, firestore
 
         with _init_lock:
             if not _app_initialized:
-                cred = credentials.Certificate(cred_path)
-                firebase_admin.initialize_app(cred)
+                cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+                if cred_path and os.path.isfile(cred_path):
+                    cred = credentials.Certificate(cred_path)
+                    firebase_admin.initialize_app(cred)
+                else:
+                    firebase_admin.initialize_app()
                 _app_initialized = True
         return firestore.client()
 
@@ -110,7 +95,7 @@ class FirestoreLogger:
         return self._db.collection("bots").document(self.bot_id)
 
     def log_trade(self, row_data: dict) -> None:
-        if not self.enabled or not self._db:
+        if not self._db:
             return
         try:
             from firebase_admin import firestore as fs
@@ -139,7 +124,7 @@ class FirestoreLogger:
 
     def update_account(self, summary: dict[str, Any]) -> None:
         """Upsert account-level fields (balance, status, open positions, etc.)."""
-        if not self.enabled or not self._db:
+        if not self._db:
             return
         try:
             from firebase_admin import firestore as fs
@@ -162,7 +147,7 @@ class FirestoreLogger:
 
     def append_daily_log_entries(self, entries: list[dict[str, Any]]) -> None:
         """Write batched log lines under today's UTC date."""
-        if not self.enabled or not self._db or not entries:
+        if not self._db or not entries:
             return
         try:
             from firebase_admin import firestore as fs

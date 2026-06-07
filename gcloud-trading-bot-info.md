@@ -20,7 +20,7 @@
 | Memory | `1Gi` |
 | Timeout | `300s` |
 | Max Instances | `1` |
-| Current Revision | `trading-bot-00004-sfb` |
+| Current Revision | `trading-bot-00005-8w4` |
 
 ---
 
@@ -35,7 +35,7 @@
 | Invoker SA | `scheduler-invoker@trading-bot-498206.iam.gserviceaccount.com` |
 | Location | `us-central1` |
 | State | `ENABLED` |
-| Last Run | `2026-06-07 10:54 UTC` (200 OK) |
+| Last Run | `2026-06-07 11:23 UTC` (200 OK) |
 
 ---
 
@@ -123,6 +123,13 @@ gcloud secrets create SECRET_NAME --data-file=- <<< "SECRET_VALUE"
 gcloud secrets add-iam-policy-binding SECRET_NAME `
   --member="serviceAccount:544780539794-compute@developer.gserviceaccount.com" `
   --role="roles/secretmanager.secretAccessor"
+```
+
+### Grant Cloud Run service account Firestore access
+```powershell
+gcloud projects add-iam-policy-binding trading-bot-498206 `
+  --member="serviceAccount:544780539794-compute@developer.gserviceaccount.com" `
+  --role="roles/datastore.user"
 ```
 
 ### Update an existing secret value

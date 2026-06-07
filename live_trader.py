@@ -317,7 +317,8 @@ try:
 
     _firestore_logger = FirestoreLogger()
     _trade_logger = CompositeTradeLogger(_excel_logger, _firestore_logger)
-except ImportError:
+except Exception:
+    log.critical("Firestore init failed — trades will log to Excel only")
     _trade_logger = _excel_logger
 
 
@@ -943,7 +944,7 @@ def main():
     load_dotenv(os.path.join(BASE_DIR, ".env"))
 
     # Stream logs to Firestore daily buckets (UTC) when Firebase is enabled
-    if _firestore_logger is not None and _firestore_logger.enabled:
+    if _firestore_logger is not None:
         try:
             from integrations.firestore_log_handler import attach_firestore_daily_logs
             attach_firestore_daily_logs(_firestore_logger)
@@ -1014,7 +1015,7 @@ def main():
 
     def _push_firestore_heartbeat(is_offline: bool = False) -> None:
         nonlocal _last_firestore_heartbeat
-        if _firestore_logger is None or not _firestore_logger.enabled:
+        if _firestore_logger is None:
             return
         now = time.time()
         if now - _last_firestore_heartbeat < FIRESTORE_HEARTBEAT_SEC:

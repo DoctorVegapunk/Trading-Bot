@@ -42,8 +42,6 @@ class FirestoreDailyLogHandler(logging.Handler):
         atexit.register(self.close)
 
     def emit(self, record: logging.LogRecord) -> None:
-        if not self._fs.enabled:
-            return
         # Avoid feedback loop from Firestore integration loggers
         if record.name.startswith("integrations.firestore"):
             return
@@ -87,10 +85,8 @@ def attach_firestore_daily_logs(
     firestore_logger: "FirestoreLogger",
     *,
     root_logger: logging.Logger | None = None,
-) -> FirestoreDailyLogHandler | None:
-    """Attach daily Firestore log handler to the root logger if Firebase is enabled."""
-    if not firestore_logger.enabled:
-        return None
+) -> FirestoreDailyLogHandler:
+    """Attach daily Firestore log handler to the root logger."""
 
     root = root_logger or logging.getLogger()
     min_level_name = __import__("os").environ.get("FIREBASE_LOG_LEVEL", "INFO").upper()
