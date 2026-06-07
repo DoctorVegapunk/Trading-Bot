@@ -225,6 +225,11 @@ class CTraderFixBroker(Broker):
     def get_account_currency(self) -> str:
         return "USD"
 
+    def get_symbol_id(self, symbol: str) -> Optional[int]:
+        """Return the FIX/Open API symbol ID for a given symbol name."""
+        clean = symbol.upper().replace("-", "")
+        return self._symbol_ids.get(clean)
+
     def get_recent_deals(self, hours: int = 24, max_rows: int = 10) -> list[dict]:
         """Fetch recent trade history from Open API. Returns empty list if unavailable."""
         if self._open_api and self._open_api.connected:

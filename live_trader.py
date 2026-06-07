@@ -425,7 +425,7 @@ from broker.history import fetch_hourly_history
 # ─────────────────────────────────────────────────────────────────────────────
 
 def fetch_candles_with_fallback(symbol: str, count: int = 600, max_retries: int = 3) -> Optional[pd.DataFrame]:
-    """Try Yahoo Finance first, retry up to `max_retries` times with 1-min delay, then fall back to FIX broker."""
+    """Try Yahoo Finance first, retry up to `max_retries` times with 1-min delay, then fall back to FIX broker, then Open API."""
     for attempt in range(1, max_retries + 1):
         df = fetch_hourly_history(symbol, count)
         if df is not None and len(df) >= count:
@@ -438,7 +438,17 @@ def fetch_candles_with_fallback(symbol: str, count: int = 600, max_retries: int 
             time.sleep(60)
 
     log.warning("%s | Yahoo Finance exhausted — falling back to FIX broker candles", symbol)
-    return get_broker().get_bid_ask_candles(symbol, count)
+    df = get_broker().get_bid_ask_candles(symbol, count)
+    if df is not None and len(df) >= count:
+        return df
+
+    # Third tier: Open API Trendbars
+    from broker.open_api_history import fetch_open_api_history
+    log.warning("%s | FIX exhausted — trying Open API Trendbars", symbol)
+    broker = get_broker()
+    open_api = getattr(broker, "_open_api", None)
+    df = fetch_open_api_history(symbol, count, open_api_client=open_api, broker=broker)
+    return df
 
 
 # ─────────────────────────────────────────────────────────────────────────────
