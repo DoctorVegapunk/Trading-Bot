@@ -10,11 +10,13 @@ xgboost>=2.0.0
 # ── Excel trade log ───────────────────────────────────────────────────────────
 openpyxl>=3.1.2
 
-# ── MT5 mode (Windows only — optional if you only use FIX) ───────────────────
-MetaTrader5>=5.0.45
-
 # ── FIX mode (headless / VPS) ─────────────────────────────────────────────────
 yfinance>=0.2.40
 
+# ── cTrader Open API (live balance + trade history) ───────────────────────────
+ctrader-open-api>=0.9.0
+
 # ── Firestore trade logging (optional) ────────────────────────────────────────
 firebase-admin>=6.5.0
+
+flask==3.0.3

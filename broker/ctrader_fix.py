@@ -37,7 +37,7 @@ def _env_bool(name: str, default: bool) -> bool:
 class CTraderFixBroker(Broker):
     """cTrader FIX 4.4 implementation for headless/server trading."""
 
-    def __init__(self, symbols: list[str], cache_dir: str):
+    def __init__(self, symbols: list[str], cache_dir: str, open_api_client=None):
         self.symbols = [s.upper() for s in symbols]
         self._cache_dir = cache_dir
 
@@ -89,6 +89,9 @@ class CTraderFixBroker(Broker):
         self._quote: Optional[FixSession] = None
         self._trade: Optional[FixSession] = None
         self._md_req_ids: dict[str, str] = {}
+        self._open_api = open_api_client
+        if self._open_api:
+            log.info("Open API client provided — live balance and deal history available")
 
     def _load_symbol_overrides(self) -> None:
         for sym in self.symbols:
@@ -171,6 +174,8 @@ class CTraderFixBroker(Broker):
             self._quote.disconnect()
         if self._trade:
             self._trade.disconnect()
+        if self._open_api:
+            self._open_api.disconnect()
 
     def ensure_connected(self) -> bool:
         if not _check_internet():
@@ -207,11 +212,27 @@ class CTraderFixBroker(Broker):
         return None
 
     def get_account_balance(self) -> float:
-        """Equity in USD (used for lot sizing)."""
+        """Equity in USD (used for lot sizing). Prefers Open API live balance."""
+        if self._open_api and self._open_api.connected:
+            try:
+                balance, _ = self._open_api.get_balance()
+                self._balance_usd = balance
+                log.debug("Open API live balance: %.2f USD", balance)
+            except Exception as exc:
+                log.warning("Open API balance failed, using cached: %s", exc)
         return self._balance_usd
 
     def get_account_currency(self) -> str:
         return "USD"
+
+    def get_recent_deals(self, hours: int = 24, max_rows: int = 10) -> list[dict]:
+        """Fetch recent trade history from Open API. Returns empty list if unavailable."""
+        if self._open_api and self._open_api.connected:
+            try:
+                return self._open_api.get_recent_deals(hours=hours, max_rows=max_rows)
+            except Exception as exc:
+                log.debug("Open API deal history failed: %s", exc)
+        return []
 
     def refresh_positions(self) -> None:
         self._request_positions()

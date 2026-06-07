@@ -726,54 +726,53 @@ def run_instrument_loop(state: InstrumentState, model_payload: dict,
     """Check for a new completed candle and act if a signal fires."""
     broker = get_broker()
     symbol = state.broker_symbol
+    now_utc = datetime.now(timezone.utc)
 
+    # ── Lightweight time-based check (zero I/O) ────────────────────────
+    # Avoids downloading 650 Yahoo candles on every poll cycle. Since 1H
+    # candles close at the top of each hour, we can compute when the next
+    # one is due without any network calls.
+    if state.last_candle_time is not None:
+        next_candle_close = state.last_candle_time + pd.Timedelta(hours=1)
+        if now_utc < next_candle_close:
+            if state.last_wait_logged != state.last_candle_time:
+                state.last_wait_logged = state.last_candle_time
+                state.last_heartbeat_time = now_utc
+                mins_to_next = int((next_candle_close - now_utc).total_seconds() / 60)
+                log.info(
+                    f"{symbol} | Waiting for next candle "
+                    f"(last closed: {state.last_candle_time}) "
+                    f"~{mins_to_next}min remaining"
+                )
+            return
+
+        mins_since_last = (now_utc - state.last_candle_time).total_seconds() / 60
+        if mins_since_last > 120:
+            if state.last_heartbeat_time is None or \
+                    (now_utc - state.last_heartbeat_time).total_seconds() >= 3600:
+                state.last_heartbeat_time = now_utc
+                log.warning(
+                    f"{symbol} | Market appears closed or price feed stopped. "
+                    f"Last candle: {state.last_candle_time} ({mins_since_last/60:.1f}h ago). "
+                    f"Bot is paused — will resume when market reopens."
+                )
+            return
+
+    # ── Full Yahoo fetch (once per new candle or on first run) ──────────
     df = fetch_candles_with_fallback(symbol, CANDLE_LOOKBACK)
     if df is None or len(df) < 300:
         log.warning(f"{symbol}: Not enough candles ({len(df) if df is not None else 0})")
         return
 
-    # The last candle in df is the CURRENT (still-forming) candle — skip it
-    # We trade on the LAST COMPLETED candle (second-to-last row)
     latest_closed_time = df.index[-2]
 
-    # ── Staleness check ─────────────────────────────────────────────────
-    # If the newest closed candle is older than 2 hours, data feed has stopped
-    # (market closed, weekend, or disconnection).
-    # Log a clear warning so the monitor shows WHY nothing is happening.
-    now_utc = datetime.now(timezone.utc)
-    candle_age_mins = (now_utc - latest_closed_time).total_seconds() / 60
-    if candle_age_mins > 120:
-        # Only log once per hour to avoid spam
-        if state.last_heartbeat_time is None or \
-                (now_utc - state.last_heartbeat_time).total_seconds() >= 3600:
-            state.last_heartbeat_time = now_utc
-            log.warning(
-                f"{symbol} | Market appears closed or price feed stopped. "
-                f"Last candle: {latest_closed_time} ({candle_age_mins/60:.1f}h ago). "
-                f"Bot is paused — will resume when market reopens."
-            )
-        return
-
-    if state.last_candle_time == latest_closed_time:
-        now = datetime.now(timezone.utc)
-
-        # Log once when we first enter the wait for this candle
-        if state.last_wait_logged != latest_closed_time:
-            state.last_wait_logged    = latest_closed_time
-            state.last_heartbeat_time = now
-            mins_to_next = 60 - now.minute
-            log.info(
-                f"{symbol} | Waiting for next candle "
-                f"(last closed: {latest_closed_time}) "
-                f"~{mins_to_next}min remaining"
-            )
-
-        return  # No new completed candle yet
+    if state.last_candle_time is not None and state.last_candle_time == latest_closed_time:
+        return  # Somehow the same candle — skip
 
     state.last_candle_time = latest_closed_time
     state.bar_index += 1
     log.info(f"\n{'─'*55}")
-    log.info(f"{symbol} | New 1H candle closed: {latest_closed_time}")
+    log.info(f"{symbol} | 1H candle closed: {latest_closed_time}")
 
     # Use all data up to and including the last closed candle
     df_closed = df.iloc[:-1]
@@ -878,6 +877,22 @@ def run_instrument_loop(state: InstrumentState, model_payload: dict,
     if not success:
         log.error(f"  Order failed for {symbol}")
         return
+
+    # ── Pull deal history from Open API (live only) ───────────────────
+    if not dry_run:
+        try:
+            deals = broker.get_recent_deals(hours=1, max_rows=5)
+            if deals:
+                d = deals[0]
+                log.info(
+                    "  Deal confirmed: id=%s %s %.2f lots @ %.5f",
+                    d.get("deal_id", "?"), d.get("direction", "?"),
+                    d.get("volume", 0), d.get("price", 0),
+                )
+            else:
+                log.info("  No deals yet — may appear next poll cycle")
+        except Exception as exc:
+            log.debug("Deal history pull failed: %s", exc)
 
     # ── Log trade to Excel ────────────────────────────────────────────
     risk_amount = balance * RISK_PER_TRADE
