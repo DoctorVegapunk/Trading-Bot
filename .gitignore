@@ -2,6 +2,7 @@
 secrets/
 *.json
 !models/**/*.json
+*.log
 *.pyc
 __pycache__/
 data/fix_cache/*.pkl

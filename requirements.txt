@@ -16,7 +16,7 @@ yfinance>=0.2.40
 # ── cTrader Open API (live balance + trade history) ───────────────────────────
 ctrader-open-api>=0.9.0
 
-# ── Firestore trade logging (optional) ────────────────────────────────────────
-firebase-admin>=6.5.0
+# ── Firestore trade logging (optional — install manually on VPS/desktop) ─────
+# firebase-admin>=6.5.0
 
 flask==3.0.3
