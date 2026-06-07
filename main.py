@@ -38,15 +38,6 @@ def run_once():
         broker.shutdown()
         raise RuntimeError("No models loaded — make sure models/ folder is present.")
 
-    # Attach Firestore daily log handler if available
-    fs_handler = None
-    if lt._firestore_logger is not None:
-        try:
-            from integrations.firestore_log_handler import attach_firestore_daily_logs
-            fs_handler = attach_firestore_daily_logs(lt._firestore_logger)
-        except Exception as exc:
-            log.error("Firestore log handler failed: %s", exc)
-
     # Fresh state each run — last_candle_time=None means it always processes the latest candle
     states = {key: lt.InstrumentState(key, instruments[key]) for key in models}
 
@@ -80,12 +71,6 @@ def run_once():
             log.info("Firestore account summary pushed")
         except Exception as exc:
             log.debug("Firestore summary skipped: %s", exc)
-
-    if fs_handler is not None:
-        try:
-            fs_handler.close()
-        except Exception:
-            pass
 
     broker.shutdown()
     log.info("Run complete.")

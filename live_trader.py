@@ -312,14 +312,10 @@ class ExcelTradeLogger:
 _excel_logger = ExcelTradeLogger(TRADE_LOG_XLSX)
 _firestore_logger = None
 try:
-    from integrations.trade_log import CompositeTradeLogger
     from integrations.firestore_logger import FirestoreLogger
-
     _firestore_logger = FirestoreLogger()
-    _trade_logger = CompositeTradeLogger(_excel_logger, _firestore_logger)
 except Exception:
-    log.critical("Firestore init failed — trades will log to Excel only")
-    _trade_logger = _excel_logger
+    log.critical("Firestore init failed — hourly signal data not logged to Firestore")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -801,16 +797,23 @@ def run_instrument_loop(state: InstrumentState, model_payload: dict,
         f"EMA_dist={signal.get('ema_200_dist', 0):.4f}  ADX_30ma={signal.get('adx_30ma', 0):.1f}"
     )
 
+    balance = broker.get_account_balance()
+
+    def _log_fs(traded: bool = False, **kwargs) -> None:
+        if _firestore_logger is not None:
+            _firestore_logger.log_hour(
+                symbol, signal, traded=traded, account_equity=balance,
+                dry_run=dry_run, **kwargs,
+            )
+
     if signal["direction"] == "HOLD":
         log.info(f"  → HOLD: {signal['regime_reason']}")
+        _log_fs()
         return
 
     direction = signal["direction"]
 
     # ── Concurrent position gate ─────────────────────────────────────────
-    # Count all open positions across every instrument this bot manages.
-    # This mirrors the backtest which allows unlimited simultaneous trades
-    # (MAX_CONCURRENT_TRADES = 999 by default). Lower it to cap live exposure.
     broker.refresh_positions()
     bot_positions = broker.get_bot_positions()
     if len(bot_positions) >= MAX_CONCURRENT_TRADES:
@@ -818,12 +821,14 @@ def run_instrument_loop(state: InstrumentState, model_payload: dict,
             f"  → HOLD: {len(bot_positions)} open position(s) already "
             f"(MAX_CONCURRENT_TRADES={MAX_CONCURRENT_TRADES})"
         )
+        _log_fs()
         return
 
     # ── Cooldown check ────────────────────────────────────────────────
     bars_since_loss = state.bar_index - state.last_loss_bar
     if bars_since_loss < COOLDOWN_BARS:
         log.info(f"  → HOLD: cooldown ({bars_since_loss}/{COOLDOWN_BARS} bars since last loss)")
+        _log_fs()
         return
 
     # ── Monthly profit cap ────────────────────────────────────────────
@@ -840,10 +845,12 @@ def run_instrument_loop(state: InstrumentState, model_payload: dict,
         if direction == "BUY" and state.buy_month_cap > 0:
             if state.buy_month_pnl >= CB_MONTHLY_PROFIT_CAP * state.buy_month_cap:
                 log.info(f"  → HOLD: BUY monthly profit cap hit ({state.buy_month_pnl:.2f})")
+                _log_fs()
                 return
         if direction == "SELL" and state.sell_month_cap > 0:
             if state.sell_month_pnl >= CB_MONTHLY_PROFIT_CAP * state.sell_month_cap:
                 log.info(f"  → HOLD: SELL monthly profit cap hit ({state.sell_month_pnl:.2f})")
+                _log_fs()
                 return
 
     # ── Position sizing ───────────────────────────────────────────────
@@ -852,6 +859,7 @@ def run_instrument_loop(state: InstrumentState, model_payload: dict,
     tick     = broker.get_tick(symbol)
     if tick is None:
         log.error(f"  → HOLD: no live quote for {symbol}")
+        _log_fs()
         return
     price    = tick.ask if direction == "BUY" else tick.bid
 
@@ -887,6 +895,7 @@ def run_instrument_loop(state: InstrumentState, model_payload: dict,
 
     if not success:
         log.error(f"  Order failed for {symbol}")
+        _log_fs()
         return
 
     # ── Pull deal history from Open API (live only) ───────────────────
@@ -904,6 +913,8 @@ def run_instrument_loop(state: InstrumentState, model_payload: dict,
                 log.info("  No deals yet — may appear next poll cycle")
         except Exception as exc:
             log.debug("Deal history pull failed: %s", exc)
+
+    _log_fs(traded=True, lot_size=lot_size, entry_price=price, sl_price=sl_price, tp_price=tp_price)
 
     # ── Log trade to Excel ────────────────────────────────────────────
     risk_amount = balance * RISK_PER_TRADE
@@ -942,14 +953,6 @@ def main():
     args = parser.parse_args()
 
     load_dotenv(os.path.join(BASE_DIR, ".env"))
-
-    # Stream logs to Firestore daily buckets (UTC) when Firebase is enabled
-    if _firestore_logger is not None:
-        try:
-            from integrations.firestore_log_handler import attach_firestore_daily_logs
-            attach_firestore_daily_logs(_firestore_logger)
-        except Exception as exc:
-            log.warning("Firestore daily log handler not attached: %s", exc)
 
     # Determine instruments to trade
     if args.instrument:
