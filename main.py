@@ -15,16 +15,13 @@ app = Flask(__name__)
 
 def run_once():
     from broker.factory import get_broker, init_broker, load_dotenv
-    from live_trader import (
-        INSTRUMENT_MAP, FIX_CACHE_DIR,
-        InstrumentState, load_model, run_instrument_loop
-    )
+    import live_trader as lt
 
     load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
-    instruments    = INSTRUMENT_MAP
+    instruments    = lt.INSTRUMENT_MAP
     broker_symbols = list(instruments.values())
-    broker         = init_broker(broker_symbols, FIX_CACHE_DIR)
+    broker         = init_broker(broker_symbols, lt.FIX_CACHE_DIR)
 
     if not broker.connect():
         raise RuntimeError("Could not connect to broker (FIX). Check FIX_PASSWORD env var.")
@@ -33,7 +30,7 @@ def run_once():
 
     models = {}
     for key in instruments:
-        payload = load_model(key)
+        payload = lt.load_model(key)
         if payload:
             models[key] = payload
 
@@ -41,18 +38,54 @@ def run_once():
         broker.shutdown()
         raise RuntimeError("No models loaded — make sure models/ folder is present.")
 
+    # Attach Firestore daily log handler if available
+    fs_handler = None
+    if lt._firestore_logger is not None:
+        try:
+            from integrations.firestore_log_handler import attach_firestore_daily_logs
+            fs_handler = attach_firestore_daily_logs(lt._firestore_logger)
+        except Exception as exc:
+            log.error("Firestore log handler failed: %s", exc)
+
     # Fresh state each run — last_candle_time=None means it always processes the latest candle
-    states = {key: InstrumentState(key, instruments[key]) for key in models}
+    states = {key: lt.InstrumentState(key, instruments[key]) for key in models}
 
     results = []
     for key, state in states.items():
         try:
             log.info(f"Running signal check for {key}...")
-            run_instrument_loop(state, models[key], dry_run=False)
+            lt.run_instrument_loop(state, models[key], dry_run=False)
             results.append({"instrument": key, "status": "ok"})
         except Exception as exc:
             log.error(f"Error on {key}: {exc}", exc_info=True)
             results.append({"instrument": key, "status": "error", "error": str(exc)})
+
+    # Push account summary to Firestore
+    if lt._firestore_logger is not None:
+        try:
+            from integrations.firestore_logger import build_account_summary
+
+            broker.refresh_positions()
+            positions = broker.get_bot_positions()
+            summary = build_account_summary(
+                broker_name=broker.name,
+                broker_backend="fix",
+                balance=broker.get_account_balance(),
+                currency=broker.get_account_currency(),
+                open_positions=len(positions),
+                instruments=list(instruments.keys()),
+                dry_run=False,
+            )
+            lt._firestore_logger.update_account(summary)
+            log.info("Firestore account summary pushed")
+        except Exception as exc:
+            log.debug("Firestore summary skipped: %s", exc)
+
+    if fs_handler is not None:
+        try:
+            fs_handler.close()
+        except Exception:
+            pass
 
     broker.shutdown()
     log.info("Run complete.")
