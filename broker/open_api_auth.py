@@ -99,7 +99,14 @@ class OpenApiAuth:
             try:
                 new_token = self._refresh(rt)
                 self._token = new_token
-                self._save_token(new_token)
+                try:
+                    self._save_token(new_token)
+                except Exception:
+                    pass  # best-effort (fails on Cloud Run read-only fs)
+                # Update env var so subsequent calls skip the refresh
+                os.environ["OPEN_API_TOKEN_JSON"] = json.dumps(
+                    new_token, separators=(",", ":")
+                )
                 return new_token["access_token"]
             except Exception as exc:
                 log.error("Token refresh failed: %s", exc)
