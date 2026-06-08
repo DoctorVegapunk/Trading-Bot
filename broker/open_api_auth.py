@@ -217,9 +217,8 @@ def main():
 
     # Check if we already have a valid token
     try:
-        token = auth.get_valid_token()
-        print(f"Already have a valid access token (expires "
-              f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(token['expires_at']))})")
+        auth.get_valid_token(refresh_token=os.environ.get("OPEN_API_REFRESH_TOKEN"))
+        print("Already have a valid access token")
         return
     except RuntimeError:
         pass
