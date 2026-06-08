@@ -308,6 +308,28 @@ class ExcelTradeLogger:
         wb.close()
 
 
+_KES_RATE: float | None = None
+
+
+def _get_kes_rate() -> float | None:
+    global _KES_RATE
+    if _KES_RATE is not None:
+        return _KES_RATE
+    from broker.currency import _fetch_usd_per_unit
+    try:
+        _KES_RATE = _fetch_usd_per_unit("KES")
+    except Exception:
+        pass
+    return _KES_RATE
+
+
+def _usd_to_kes(usd: float) -> float | None:
+    rate = _get_kes_rate()
+    if rate is None or rate <= 0:
+        return None
+    return round(usd / rate, 2)
+
+
 # Singleton loggers used throughout the module
 _excel_logger = ExcelTradeLogger(TRADE_LOG_XLSX)
 _firestore_logger = None
@@ -935,11 +957,13 @@ def run_instrument_loop(state: InstrumentState, model_payload: dict,
         "ADX":               round(signal["adx"], 2),
         "ATR Regime":        round(signal["atr_regime"], 4),
         "EMA 200 Dist":      round(signal["ema_200_dist"], 6),
-        "Account Equity":    round(balance, 2),
-        "Risk Amount":       round(risk_amount, 2),
-        "Currency":          currency,
-        "Dry Run":           "Yes" if dry_run else "No",
-        "Signal Reason":     signal.get("regime_reason", "All filters passed"),
+        "Account Equity (USD)": round(balance, 2),
+        "Account Equity (KES)": _usd_to_kes(balance),
+        "Risk Amount (USD)":    round(risk_amount, 2),
+        "Risk Amount (KES)":    _usd_to_kes(risk_amount),
+        "Currency":             currency,
+        "Dry Run":              "Yes" if dry_run else "No",
+        "Signal Reason":        signal.get("regime_reason", "All filters passed"),
     }
     _trade_logger.log_trade(row)
 

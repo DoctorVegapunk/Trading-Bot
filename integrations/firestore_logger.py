@@ -16,6 +16,28 @@ from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
+_KES_RATE: float | None = None
+
+
+def _get_kes_rate() -> float | None:
+    """Fetch or return cached KES->USD rate."""
+    global _KES_RATE
+    if _KES_RATE is not None:
+        return _KES_RATE
+    from broker.currency import _fetch_usd_per_unit
+    try:
+        _KES_RATE = _fetch_usd_per_unit("KES")
+    except Exception:
+        pass
+    return _KES_RATE
+
+
+def _usd_to_kes(usd: float) -> float | None:
+    rate = _get_kes_rate()
+    if rate is None or rate <= 0:
+        return None
+    return round(usd / rate, 2)
+
 _app_initialized = False
 _init_lock = threading.Lock()
 
@@ -96,6 +118,7 @@ class FirestoreLogger:
                 "adx": round(signal.get("adx", 0.0), 2),
                 "signal_reason": signal.get("regime_reason", "All filters passed"),
                 "account_equity": round(account_equity, 2) if account_equity else None,
+                "account_equity_kes": _usd_to_kes(account_equity) if account_equity else None,
                 "dry_run": dry_run,
                 "timestamp_utc": now.strftime("%Y-%m-%d %H:%M:%S"),
             }
@@ -135,6 +158,7 @@ def build_account_summary(
         "broker": broker_name,
         "broker_backend": broker_backend,
         "balance_usd": round(balance, 2),
+        "balance_kes": _usd_to_kes(balance),
         "currency": currency,
         "open_positions": open_positions,
         "instruments": instruments,

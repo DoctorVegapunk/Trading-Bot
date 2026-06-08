@@ -46,6 +46,19 @@ def to_usd(amount: float, currency: str) -> float:
 _fx_cache: dict[str, float] = {}
 
 
+def from_usd(amount_usd: float, currency: str) -> float:
+    """Convert `amount_usd` to `currency` using the cached Yahoo rate."""
+    ccy = normalize_currency(currency)
+    if ccy == "USD":
+        return amount_usd
+    if amount_usd <= 0:
+        return 0.0
+    rate = _fetch_usd_per_unit(ccy)
+    if rate is None or rate <= 0:
+        return 0.0
+    return amount_usd / rate
+
+
 def _fetch_usd_per_unit(currency: str) -> Optional[float]:
     if currency in _fx_cache:
         return _fx_cache[currency]
