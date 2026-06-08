@@ -65,11 +65,14 @@ def run_once():
 
             broker.refresh_positions()
             positions = broker.get_bot_positions()
+            balance = broker.get_account_balance()
+            currency = broker.get_account_currency()
+            log.info("Account: %.2f %s (%d open positions)", balance, currency, len(positions))
             summary = build_account_summary(
                 broker_name=broker.name,
                 broker_backend="fix",
-                balance=broker.get_account_balance(),
-                currency=broker.get_account_currency(),
+                balance=balance,
+                currency=currency,
                 open_positions=len(positions),
                 instruments=list(instruments.keys()),
                 dry_run=False,

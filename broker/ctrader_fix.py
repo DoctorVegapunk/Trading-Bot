@@ -54,7 +54,7 @@ class CTraderFixBroker(Broker):
 
         # Position sizing is always in USD (models assume USD account / USD-quoted pairs).
         self._account_currency = normalize_currency(
-            os.environ.get("FIX_ACCOUNT_CURRENCY", "KES")
+            os.environ.get("FIX_ACCOUNT_CURRENCY") or os.environ.get("FIX_CURRENCY", "KES")
         )
         balance_usd = os.environ.get("FIX_BALANCE_USD", "").strip()
         if balance_usd:
@@ -217,9 +217,9 @@ class CTraderFixBroker(Broker):
             try:
                 balance, _ = self._open_api.get_balance()
                 self._balance_usd = balance
-                log.debug("Open API live balance: %.2f USD", balance)
+                log.info("Open API live balance: %.2f USD", balance)
             except Exception as exc:
-                log.warning("Open API balance failed, using cached: %s", exc)
+                log.warning("Open API balance failed, using cached %.2f: %s", self._balance_usd, exc)
         return self._balance_usd
 
     def get_account_currency(self) -> str:
