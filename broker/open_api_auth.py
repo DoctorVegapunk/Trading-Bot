@@ -78,12 +78,14 @@ class OpenApiAuth:
         raw = os.environ.get("OPEN_API_TOKEN_JSON", "").strip()
         if raw:
             try:
-                env_token = json.loads(raw)
+                # Strip any BOM or stray whitespace
+                clean = raw.lstrip("\ufeff").lstrip("\uFEFF").strip()
+                env_token = json.loads(clean)
                 if self._is_fresh(env_token):
                     self._token = env_token
                     return env_token["access_token"]
-            except (json.JSONDecodeError, KeyError):
-                log.warning("OPEN_API_TOKEN_JSON is invalid or expired")
+            except (json.JSONDecodeError, KeyError) as exc:
+                log.warning("OPEN_API_TOKEN_JSON is invalid or expired: %s", exc)
 
         # Disk check
         disk_token = self._load_token()
