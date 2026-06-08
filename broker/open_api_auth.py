@@ -65,13 +65,25 @@ class OpenApiAuth:
 
         Priority:
           1. In-memory cached token (if still fresh)
-          2. Token file on disk (if still fresh)
-          3. Refresh using stored refresh_token or provided one
-          4. Raise if none of the above works
+          2. OPEN_API_TOKEN_JSON env var (Secret Manager fallback)
+          3. Token file on disk (if still fresh)
+          4. Refresh using stored refresh_token or provided one
+          5. Raise if none of the above works
         """
         # In-memory check
         if self._token and self._is_fresh(self._token):
             return self._token["access_token"]
+
+        # Env-var based token (Secret Manager fallback — no disk needed)
+        raw = os.environ.get("OPEN_API_TOKEN_JSON", "").strip()
+        if raw:
+            try:
+                env_token = json.loads(raw)
+                if self._is_fresh(env_token):
+                    self._token = env_token
+                    return env_token["access_token"]
+            except (json.JSONDecodeError, KeyError):
+                log.warning("OPEN_API_TOKEN_JSON is invalid or expired")
 
         # Disk check
         disk_token = self._load_token()

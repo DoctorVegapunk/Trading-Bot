@@ -65,6 +65,7 @@
 | `OPEN_API_CLIENT_SECRET` | cTrader Open API client secret |
 | `OPEN_API_CTID_TRADER_ACCOUNT_ID` | Open API account ID |
 | `OPEN_API_REFRESH_TOKEN` | OAuth 2.0 refresh token for Open API (fileless auth on Cloud Run) |
+| `OPEN_API_TOKEN_JSON` | Full OAuth token JSON (access + refresh tokens + expiry) — written to disk at startup |
 
 New secrets are created via `gcloud secrets create` + IAM binding (see commands below). All secrets use the `544780539794-compute@developer.gserviceaccount.com` service account with `roles/secretmanager.secretAccessor`.
 
@@ -107,7 +108,7 @@ gcloud run deploy trading-bot `
   --memory 1Gi `
   --timeout 300 `
   --max-instances 1 `
-  --set-secrets="FIX_PASSWORD=FIX_PASSWORD:latest,FIX_HOST=FIX_HOST:latest,FIX_QUOTE_PORT=FIX_QUOTE_PORT:latest,FIX_TRADE_PORT=FIX_TRADE_PORT:latest,FIX_USE_SSL=FIX_USE_SSL:latest,FIX_SENDER_COMP_ID=FIX_SENDER_COMP_ID:latest,FIX_TARGET_COMP_ID=FIX_TARGET_COMP_ID:latest,FIX_ACCOUNT=FIX_ACCOUNT:latest,FIX_SENDER_SUB_ID=FIX_SENDER_SUB_ID:latest,FIX_BALANCE=FIX_BALANCE:latest,FIX_CURRENCY=FIX_CURRENCY:latest,OPEN_API_CLIENT_ID=OPEN_API_CLIENT_ID:latest,OPEN_API_CLIENT_SECRET=OPEN_API_CLIENT_SECRET:latest,OPEN_API_CTID_TRADER_ACCOUNT_ID=OPEN_API_CTID_TRADER_ACCOUNT_ID:latest,OPEN_API_REFRESH_TOKEN=OPEN_API_REFRESH_TOKEN:latest"
+  --set-secrets="FIX_PASSWORD=FIX_PASSWORD:latest,FIX_HOST=FIX_HOST:latest,FIX_QUOTE_PORT=FIX_QUOTE_PORT:latest,FIX_TRADE_PORT=FIX_TRADE_PORT:latest,FIX_USE_SSL=FIX_USE_SSL:latest,FIX_SENDER_COMP_ID=FIX_SENDER_COMP_ID:latest,FIX_TARGET_COMP_ID=FIX_TARGET_COMP_ID:latest,FIX_ACCOUNT=FIX_ACCOUNT:latest,FIX_SENDER_SUB_ID=FIX_SENDER_SUB_ID:latest,FIX_BALANCE=FIX_BALANCE:latest,FIX_CURRENCY=FIX_CURRENCY:latest,OPEN_API_CLIENT_ID=OPEN_API_CLIENT_ID:latest,OPEN_API_CLIENT_SECRET=OPEN_API_CLIENT_SECRET:latest,OPEN_API_CTID_TRADER_ACCOUNT_ID=OPEN_API_CTID_TRADER_ACCOUNT_ID:latest,OPEN_API_REFRESH_TOKEN=OPEN_API_REFRESH_TOKEN:latest,OPEN_API_TOKEN_JSON=OPEN_API_TOKEN_JSON:latest"
 ```
 
 ### Add/update environment variables
